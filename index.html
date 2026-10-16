@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kalkulator Kurs Rupiah</title>
+<style>
+:root{--bg:#eef2f1;--card:#fff;--ink:#14262b;--muted:#5d6f73;--line:#cfdad9;--red:#c8102e;--focus:#0b6e7a}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1b1e;--card:#172629;--ink:#e8f0ef;--muted:#93a8ab;--line:#2b4044;--red:#ff5a73;--focus:#5cc4d0}}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:grid;place-items:center;padding:20px;background:var(--bg);color:var(--ink);font-family:"Segoe UI",system-ui,-apple-system,sans-serif}
+main{width:100%;max-width:440px;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.top{border-top:6px solid var(--red);padding:22px 24px 8px}
+h1{margin:0 0 4px;font-size:1.25rem}
+.rate{margin:0;color:var(--muted);font-size:.9rem}
+.body{padding:12px 24px 24px}
+label{display:block;font-size:.85rem;color:var(--muted);margin:14px 0 6px}
+.field{display:flex;align-items:center;border:1px solid var(--line);border-radius:10px;padding:0 14px}
+.field:focus-within{outline:2px solid var(--focus)}
+.field span{font-weight:600;color:var(--muted);margin-right:10px}
+input{flex:1;min-width:0;border:0;background:transparent;color:var(--ink);font:inherit;font-size:1.5rem;padding:12px 0;outline:none}
+.swap{display:block;margin:14px auto 0;background:none;border:1px solid var(--line);color:var(--ink);border-radius:999px;padding:6px 16px;font:inherit;font-size:.85rem;cursor:pointer}
+.swap:hover{border-color:var(--ink)}
+.swap:focus-visible,button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.result{font-size:1.75rem;font-weight:700;padding:12px 14px;border:1px solid var(--line);border-radius:10px;min-height:3.2rem;overflow-wrap:anywhere}
+.status{margin:14px 0 0;font-size:.85rem;color:var(--muted)}
+.status.error{color:var(--red)}
+.status button{background:none;border:0;color:inherit;text-decoration:underline;font:inherit;cursor:pointer;padding:0}
+</style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <h1>Kalkulator Kurs Rupiah</h1>
+    <p class="rate" id="rate">Mengambil kurs terbaru…</p>
+  </div>
+  <div class="body">
+    <label for="amount" id="fromLabel">Jumlah dalam USD</label>
+    <div class="field"><span id="fromCode">USD</span><input id="amount" type="number" inputmode="decimal" min="0" step="any" value="1"></div>
+
+    <button class="swap" id="swap" type="button">Tukar arah</button>
+
+    <label id="toLabel">Hasil dalam IDR</label>
+    <div class="result" id="result" aria-live="polite">–</div>
+
+    <p class="status" id="status"></p>
+  </div>
+</main>
+
+<script>
+const API = "https://api.frankfurter.dev/v1/latest?base=USD&symbols=IDR";
+const el = id => document.getElementById(id);
+let rate = null;          // 1 USD = rate IDR
+let usdToIdr = true;      // arah konversi
+
+const fmt = (n, cur) => new Intl.NumberFormat("id-ID", {
+  style: "currency", currency: cur,
+  maximumFractionDigits: cur === "IDR" ? 0 : 2
+}).format(n);
+
+function render() {
+  const from = usdToIdr ? "USD" : "IDR";
+  const to = usdToIdr ? "IDR" : "USD";
+  el("fromCode").textContent = from;
+  el("fromLabel").textContent = "Jumlah dalam " + from;
+  el("toLabel").textContent = "Hasil dalam " + to;
+
+  const value = parseFloat(el("amount").value);
+  if (rate === null || isNaN(value) || value < 0) { el("result").textContent = "–"; return; }
+  el("result").textContent = fmt(usdToIdr ? value * rate : value / rate, to);
+}
+
+async function loadRate() {
+  const status = el("status");
+  status.className = "status";
+  status.textContent = "";
+  try {
+    const res = await fetch(API);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    rate = data.rates.IDR;
+    const tanggal = new Date(data.date).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+    el("rate").textContent = "1 USD = " + fmt(rate, "IDR") + " (kurs " + tanggal + ")";
+    render();
+  } catch (err) {
+    rate = null;
+    el("rate").textContent = "Kurs belum tersedia";
+    status.className = "status error";
+    status.innerHTML = 'Gagal mengambil kurs. Periksa koneksi internet. <button type="button" id="retry">Coba lagi</button>';
+    el("retry").addEventListener("click", loadRate);
+    render();
+  }
+}
+
+el("amount").addEventListener("input", render);
+el("swap").addEventListener("click", () => {
+  const value = parseFloat(el("amount").value);
+  if (rate !== null && !isNaN(value)) {
+    // jadikan hasil sebagai angka input baru agar arah terasa terbalik
+    el("amount").value = +(usdToIdr ? value * rate : value / rate).toFixed(usdToIdr ? 0 : 2);
+  }
+  usdToIdr = !usdToIdr;
+  render();
+});
+
+loadRate();
+</script>
+</body>
+</html>
